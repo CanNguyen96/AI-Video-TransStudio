@@ -37,9 +37,14 @@
 - [x] `models/Video.js` — thêm fields: audioPath, errorMessage, segments
 - [x] Gemini API key đã điền vào .env
 
-### Frontend (chưa làm)
-- [ ] Nút "Tạo phụ đề" trên trang Watch/[id]
-- [ ] Thanh trạng thái Processing → Done (polling status)
-- [ ] Hiển thị phụ đề overlay trên video player
-- [ ] Chọn chế độ: chỉ dịch / song ngữ
-- [ ] Nút tải xuống file .srt
+### Frontend ✅
+- [x] Nút "Tạo phụ đề AI" + chọn ngôn ngữ dịch (dropdown)
+- [x] Polling tự động mỗi 3s → cập nhật status khi xong
+- [x] Hiển thị phụ đề overlay lên video player
+- [x] 3 chế độ: Tắt / Chỉ dịch / Song ngữ (gốc + dịch)
+- [x] Nút tải xuống từng file SRT
+- [x] Badge trạng thái: Chưa có / Đang xử lý / Hoàn thành / Lỗi
+- [x] Auto-load phụ đề nếu video đã completed khi mở trang
+
+## Giai đoạn 3 — Trình phát thông minh (tiếp theo)
+- [ ] Cho phép chỉnh sửa nội dung phụ đề trực tiếp trên web

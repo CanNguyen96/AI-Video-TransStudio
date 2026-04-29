@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const Video = require('../models/Video');
-const { extractAudio, getVideoMetadata } = require('../services/ffmpegService');
+const { extractAudio, getVideoMetadata, burnSubtitles } = require('../services/ffmpegService');
 const { transcribeAndTranslate } = require('../services/geminiService');
 const { generateSrtContent, saveSrtFile, deleteOldSrtFiles } = require('../services/subtitleService');
 
@@ -182,4 +182,60 @@ const downloadSubtitle = async (req, res) => {
   }
 };
 
-module.exports = { transcribeVideo, getSubtitle, downloadSubtitle };
+/**
+ * @desc  Download video đã burn subtitle vào
+ * @route GET /api/videos/:id/download-burned?lang=vietnamese
+ */
+const downloadBurnedVideo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const lang = req.query.lang || 'vietnamese';
+
+    const video = await Video.findById(id);
+    if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
+
+    const subtitle = video.subtitles.find(
+      (s) => s.language === lang || s.language === lang.toLowerCase()
+    );
+    if (!subtitle || !subtitle.srtPath || !fs.existsSync(subtitle.srtPath)) {
+      return res.status(404).json({ success: false, message: `Không tìm thấy file SRT ngôn ngữ: ${lang}` });
+    }
+
+    const videoFilePath = path.resolve(video.filePath);
+    if (!fs.existsSync(videoFilePath)) {
+      return res.status(404).json({ success: false, message: 'File video gốc không tồn tại' });
+    }
+
+    // Tạo file output tạm thời
+    const outputDir = path.resolve('./uploads/burned');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+    const baseName = path.parse(video.fileName).name;
+    const outputFileName = `${baseName}.${lang}.burned.mp4`;
+    const outputPath = path.join(outputDir, outputFileName);
+
+    // Burn subtitle vào video
+    await burnSubtitles(videoFilePath, path.resolve(subtitle.srtPath), outputPath);
+
+    // Stream file đã render về client để download
+    const downloadName = `${video.title}_${lang}_subtitled.mp4`;
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
+    res.setHeader('Content-Type', 'video/mp4');
+
+    const stream = fs.createReadStream(outputPath);
+    stream.pipe(res);
+
+    // Xóa file tạm sau khi stream xong
+    stream.on('end', () => {
+      try { fs.unlinkSync(outputPath); } catch (_) {}
+    });
+
+  } catch (err) {
+    console.error('❌ downloadBurnedVideo lỗi:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+};
+
+module.exports = { transcribeVideo, getSubtitle, downloadSubtitle, downloadBurnedVideo };

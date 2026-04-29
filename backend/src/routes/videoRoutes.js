@@ -12,6 +12,7 @@ const {
   transcribeVideo,
   getSubtitle,
   downloadSubtitle,
+  downloadBurnedVideo,
 } = require('../controllers/transcribeController');
 
 // GET  /api/videos          — Danh sách video
@@ -37,6 +38,9 @@ router.get('/:id/subtitles/:lang', getSubtitle);
 
 // GET    /api/videos/:id/subtitles/:lang/download — Tải xuống SRT
 router.get('/:id/subtitles/:lang/download', downloadSubtitle);
+
+// GET    /api/videos/:id/download-burned?lang=... — Download video đã burn subtitle
+router.get('/:id/download-burned', downloadBurnedVideo);
 
 
 module.exports = router;

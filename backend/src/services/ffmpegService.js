@@ -75,4 +75,49 @@ const getVideoMetadata = (videoPath) => {
   });
 };
 
-module.exports = { extractAudio, getVideoMetadata };
+/**
+ * Burn (hardcode) subtitle SRT vào video → xuất file MP4 mới
+ * @param {string} videoPath  - Đường dẫn video gốc
+ * @param {string} srtPath    - Đường dẫn file .srt
+ * @param {string} outputPath - Đường dẫn file output
+ * @returns {Promise<string>} - outputPath khi hoàn tất
+ */
+const burnSubtitles = (videoPath, srtPath, outputPath) => {
+  return new Promise((resolve, reject) => {
+    // FFmpeg trên Windows cần escape dấu ":" và "\" trong đường dẫn
+    const escapedSrt = srtPath
+      .replace(/\\/g, '/')
+      .replace(/:/g, '\\:');
+
+    console.log(`🔥 FFmpeg: Đang burn subtitle vào video...`);
+    console.log(`   Input : ${path.basename(videoPath)}`);
+    console.log(`   SRT   : ${path.basename(srtPath)}`);
+    console.log(`   Output: ${path.basename(outputPath)}`);
+
+    ffmpeg(videoPath)
+      .videoFilter(`subtitles='${escapedSrt}':force_style='FontSize=20,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2,Alignment=2'`)
+      .outputOptions([
+        '-c:v libx264',   // Re-encode video để burn subtitle
+        '-c:a copy',      // Copy audio nguyên vẹn
+        '-preset fast',   // Tốc độ encode nhanh
+        '-crf 23',        // Chất lượng tốt (0-51, càng nhỏ càng tốt)
+        '-movflags +faststart',
+      ])
+      .output(outputPath)
+      .on('start', () => console.log('   Bắt đầu render...'))
+      .on('progress', (p) => {
+        if (p.percent) process.stdout.write(`   Render: ${Math.round(p.percent)}%\r`);
+      })
+      .on('end', () => {
+        console.log(`\n✅ FFmpeg: Burn subtitle xong → ${outputPath}`);
+        resolve(outputPath);
+      })
+      .on('error', (err) => {
+        console.error('❌ FFmpeg burnSubtitles error:', err.message);
+        reject(new Error(`FFmpeg burn subtitle thất bại: ${err.message}`));
+      })
+      .run();
+  });
+};
+
+module.exports = { extractAudio, getVideoMetadata, burnSubtitles };
