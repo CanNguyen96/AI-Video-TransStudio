@@ -8,6 +8,11 @@ const {
   deleteVideo,
   streamVideo,
 } = require('../controllers/videoController');
+const {
+  transcribeVideo,
+  getSubtitle,
+  downloadSubtitle,
+} = require('../controllers/transcribeController');
 
 // GET  /api/videos          — Danh sách video
 router.get('/', getVideos);
@@ -23,5 +28,15 @@ router.get('/:id/stream', streamVideo);
 
 // DELETE /api/videos/:id    — Xóa video
 router.delete('/:id', deleteVideo);
+
+// POST   /api/videos/:id/transcribe         — Trigger pipeline FFmpeg → Gemini → .srt
+router.post('/:id/transcribe', transcribeVideo);
+
+// GET    /api/videos/:id/subtitles/:lang     — Lấy nội dung SRT (stream)
+router.get('/:id/subtitles/:lang', getSubtitle);
+
+// GET    /api/videos/:id/subtitles/:lang/download — Tải xuống SRT
+router.get('/:id/subtitles/:lang/download', downloadSubtitle);
+
 
 module.exports = router;

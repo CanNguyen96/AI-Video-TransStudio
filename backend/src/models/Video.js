@@ -48,6 +48,19 @@ const videoSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    audioPath: {
+      type: String,
+      default: null,
+    },
+    errorMessage: {
+      type: String,
+      default: null,
+    },
+    // Raw segments từ Gemini: [{start, end, original, translated}]
+    segments: {
+      type: Array,
+      default: [],
+    },
   },
   {
     timestamps: true,

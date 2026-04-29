@@ -23,8 +23,23 @@
 - [x] Backend chạy port 5000 (✅)
 - [ ] Cần: Khởi động MongoDB local để test full flow upload → xem video
 
-## Bước tiếp theo — Giai đoạn 2
-- [ ] Cài FFmpeg
-- [ ] Tích hợp Gemini API để tạo phụ đề từ audio
-- [ ] Generate file .srt
-- [ ] API `/api/videos/:id/transcribe`
+## Giai đoạn 2 — AI Core (đang làm)
+
+### Backend ✅
+- [x] Cài FFmpeg + @google/generative-ai + fluent-ffmpeg
+- [x] `services/ffmpegService.js` — tách audio từ video (.mp3 mono 16kHz)
+- [x] `services/geminiService.js` — gửi audio → Gemini 2.0 Flash → transcript + timestamp
+- [x] `services/subtitleService.js` — chuyển segments thành file .srt (đơn ngữ + song ngữ)
+- [x] `controllers/transcribeController.js` — pipeline controller + subtitle/download API
+- [x] API `POST /api/videos/:id/transcribe` — trigger pipeline bất đồng bộ (202 Accepted)
+- [x] API `GET  /api/videos/:id/subtitles/:lang` — lấy nội dung SRT
+- [x] API `GET  /api/videos/:id/subtitles/:lang/download` — tải file SRT
+- [x] `models/Video.js` — thêm fields: audioPath, errorMessage, segments
+- [x] Gemini API key đã điền vào .env
+
+### Frontend (chưa làm)
+- [ ] Nút "Tạo phụ đề" trên trang Watch/[id]
+- [ ] Thanh trạng thái Processing → Done (polling status)
+- [ ] Hiển thị phụ đề overlay trên video player
+- [ ] Chọn chế độ: chỉ dịch / song ngữ
+- [ ] Nút tải xuống file .srt
