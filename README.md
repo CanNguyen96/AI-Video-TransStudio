@@ -18,7 +18,6 @@
 - [Hướng dẫn chạy dự án](#-hướng-dẫn-chạy-dự-án)
 - [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
 - [API Reference](#-api-reference)
-- [Lộ trình phát triển](#-lộ-trình-phát-triển)
 
 ---
 
@@ -53,7 +52,7 @@
                            └─────────────────┘        └─────────────────┘
 ```
 
-**Quy trình xử lý video (Giai đoạn 2+):**
+**Quy trình xử lý video :**
 ```
 Upload Video → FFmpeg tách Audio → Gemini AI → Text + Timestamp → File .SRT → Hiển thị phụ đề
 ```
@@ -69,7 +68,7 @@ Trước khi chạy dự án, hãy chắc chắn đã cài:
 | **Node.js** | >= 18.x | [nodejs.org](https://nodejs.org) |
 | **npm** | >= 9.x | Đi kèm Node.js |
 | **MongoDB Atlas** | Cloud | [mongodb.com/atlas](https://mongodb.com/atlas) (Free tier) |
-| **FFmpeg** | Latest | [ffmpeg.org](https://ffmpeg.org) *(Giai đoạn 2)* |
+| **FFmpeg** | Latest | [ffmpeg.org](https://ffmpeg.org)|
 
 ---
 
@@ -212,27 +211,6 @@ curl -X POST http://localhost:5000/api/videos/upload \
 **Lấy danh sách video:**
 ```bash
 curl http://localhost:5000/api/videos?page=1&limit=12
-```
-
----
-
-## 🗺 Lộ trình phát triển
-
-```
-✅ Giai đoạn 1 — Nền tảng MVP
-   Upload + Thư viện + Trình phát video
-
-🔜 Giai đoạn 2 — AI Core
-   FFmpeg tách audio + Gemini API → Tạo file .SRT
-
-🔜 Giai đoạn 3 — Trình phát thông minh
-   Double Subtitle + Chỉnh sửa phụ đề
-
-🔜 Giai đoạn 4 — Tính năng Pro
-   Queue Processing (Redis) + AI Dubbing
-
-🔜 Giai đoạn 5 — Đóng gói
-   Docker + Deploy (Vercel + Render)
 ```
 
 ---
