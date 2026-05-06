@@ -6,7 +6,7 @@
 ![Tech Stack](https://img.shields.io/badge/Node.js-Express-green?logo=node.js)
 ![Tech Stack](https://img.shields.io/badge/MongoDB-Atlas-brightgreen?logo=mongodb)
 ![Tech Stack](https://img.shields.io/badge/AI-Gemini-blue?logo=google)
-![Status](https://img.shields.io/badge/Giai_đoạn-1_✅_Hoàn_thành-success)
+
 
 ---
 
@@ -18,7 +18,6 @@
 - [Hướng dẫn chạy dự án](#-hướng-dẫn-chạy-dự-án)
 - [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
 - [API Reference](#-api-reference)
-- [Lộ trình phát triển](#-lộ-trình-phát-triển)
 
 ---
 
@@ -30,8 +29,10 @@
 | Trình phát video HTML5 tùy chỉnh | 1 | ✅ Hoàn thành |
 | Thư viện quản lý video | 1 | ✅ Hoàn thành |
 | Stream video với hỗ trợ tua (Range Requests) | 1 | ✅ Hoàn thành |
-| AI tạo phụ đề tự động (Gemini API) | 2 | 🔜 Sắp có |
-| Double Subtitle (gốc + tiếng Việt) | 3 | 🔜 Sắp có |
+| AI tạo phụ đề tự động (Gemini API) | 2 | ✅ Hoàn thành |
+| Double Subtitle (gốc + tiếng Việt song ngữ) | 2 | ✅ Hoàn thành |
+| Tải file phụ đề (.srt) | 2 | ✅ Hoàn thành |
+| Tải video đã burn phụ đề (FFmpeg) | 2 | ✅ Hoàn thành |
 | Chỉnh sửa phụ đề trực tiếp | 3 | 🔜 Sắp có |
 | AI Dubbing (lồng tiếng tự động) | 4 | 🔜 Sắp có |
 
@@ -49,11 +50,11 @@
 └─────────────────┘        │  ┌───────────┐  │
                            │  │  FFmpeg   │  │        ┌─────────────────┐
                            │  │  Multer   │  │◄──────►│  Gemini AI API  │
-                           │  └───────────┘  │        │  (Giai đoạn 2)  │
+                           │  └───────────┘  │        │                 │
                            └─────────────────┘        └─────────────────┘
 ```
 
-**Quy trình xử lý video (Giai đoạn 2+):**
+**Quy trình xử lý video :**
 ```
 Upload Video → FFmpeg tách Audio → Gemini AI → Text + Timestamp → File .SRT → Hiển thị phụ đề
 ```
@@ -69,7 +70,7 @@ Trước khi chạy dự án, hãy chắc chắn đã cài:
 | **Node.js** | >= 18.x | [nodejs.org](https://nodejs.org) |
 | **npm** | >= 9.x | Đi kèm Node.js |
 | **MongoDB Atlas** | Cloud | [mongodb.com/atlas](https://mongodb.com/atlas) (Free tier) |
-| **FFmpeg** | Latest | [ffmpeg.org](https://ffmpeg.org) *(Giai đoạn 2)* |
+| **FFmpeg** | Latest | [ffmpeg.org](https://ffmpeg.org)|
 
 ---
 
@@ -153,19 +154,52 @@ AI-Video-TransStudio/
 │
 ├── frontend/                   # Next.js 16 App
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx            # Trang chủ (Hero + Features)
-│   │   │   ├── upload/
-│   │   │   │   └── page.tsx        # Trang upload video (drag & drop)
-│   │   │   ├── library/
-│   │   │   │   └── page.tsx        # Thư viện video
-│   │   │   ├── watch/[id]/
-│   │   │   │   └── page.tsx        # Trình phát video
-│   │   │   ├── layout.tsx          # Root layout + SEO
-│   │   │   └── globals.css         # Design system (dark theme)
-│   │   └── components/
-│   │       └── Navbar.tsx          # Navigation bar
-│   └── .env.local                  # ← Tạo file này (xem Bước 3)
+│   │   ├── app/                        # Next.js App Router (định nghĩa URL)
+│   │   │   ├── page.tsx                # Trang chủ (Hero + Features)
+│   │   │   ├── upload/page.tsx         # Trang upload video (drag & drop)
+│   │   │   ├── library/page.tsx        # Thư viện video
+│   │   │   ├── watch/[id]/page.tsx     # Trình phát video
+│   │   │   ├── layout.tsx              # Root layout + SEO
+│   │   │   └── globals.css             # Design system (dark theme)
+│   │   │
+│   │   ├── components/                 # React Components tái dùng
+│   │   │   ├── Navbar.tsx
+│   │   │   ├── ui/                     # Atomic UI components
+│   │   │   │   ├── LoadingSpinner.tsx
+│   │   │   │   ├── StatusBadge.tsx
+│   │   │   │   └── EmptyState.tsx
+│   │   │   ├── video/                  # Video player components
+│   │   │   │   ├── VideoPlayer.tsx
+│   │   │   │   ├── PlayerControls.tsx
+│   │   │   │   ├── SubtitleOverlay.tsx
+│   │   │   │   └── ProcessingBadge.tsx
+│   │   │   ├── watch/                  # Panels bên dưới player
+│   │   │   │   ├── VideoInfoPanel.tsx
+│   │   │   │   ├── SubtitleDownloads.tsx
+│   │   │   │   └── AiPanel.tsx
+│   │   │   ├── library/                # Library page components
+│   │   │   │   ├── VideoCard.tsx
+│   │   │   │   ├── VideoGrid.tsx
+│   │   │   │   └── LibraryHeader.tsx
+│   │   │   └── upload/                 # Upload page components
+│   │   │       ├── DropZone.tsx
+│   │   │       ├── TitleInput.tsx
+│   │   │       ├── ProgressBar.tsx
+│   │   │       └── UploadSuccess.tsx
+│   │   │
+│   │   ├── hooks/                      # Custom React Hooks
+│   │   │   ├── useVideoPlayer.ts       # Player state & controls
+│   │   │   ├── useSubtitles.ts         # SRT loading & parsing
+│   │   │   └── useVideoPolling.ts      # AI transcription & polling
+│   │   │
+│   │   ├── lib/                        # Shared utilities
+│   │   │   ├── api.ts                  # API_URL + tất cả endpoints
+│   │   │   └── homeData.ts             # Data tĩnh trang chủ
+│   │   │
+│   │   └── types/
+│   │       └── video.ts                # TypeScript interfaces chung
+│   │
+│   └── .env.local                      # ← Tạo file này (xem Bước 3)
 │
 ├── backend/                    # Node.js Express API
 │   ├── src/
@@ -178,6 +212,7 @@ AI-Video-TransStudio/
 │   │   │   └── videoController.js  # Logic xử lý video
 │   │   ├── routes/
 │   │   │   └── videoRoutes.js      # API routes
+│   │   ├── services/               # FFmpeg, Gemini AI logic
 │   │   └── middleware/
 │   │       └── upload.js           # Multer (xử lý upload file)
 │   ├── uploads/                    # Thư mục lưu video (tự tạo)
@@ -212,27 +247,6 @@ curl -X POST http://localhost:5000/api/videos/upload \
 **Lấy danh sách video:**
 ```bash
 curl http://localhost:5000/api/videos?page=1&limit=12
-```
-
----
-
-## 🗺 Lộ trình phát triển
-
-```
-✅ Giai đoạn 1 — Nền tảng MVP
-   Upload + Thư viện + Trình phát video
-
-🔜 Giai đoạn 2 — AI Core
-   FFmpeg tách audio + Gemini API → Tạo file .SRT
-
-🔜 Giai đoạn 3 — Trình phát thông minh
-   Double Subtitle + Chỉnh sửa phụ đề
-
-🔜 Giai đoạn 4 — Tính năng Pro
-   Queue Processing (Redis) + AI Dubbing
-
-🔜 Giai đoạn 5 — Đóng gói
-   Docker + Deploy (Vercel + Render)
 ```
 
 ---

@@ -8,9 +8,6 @@ const videoRoutes = require('./routes/videoRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-connectDB();
-
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -25,9 +22,24 @@ app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_PATH || './up
 // Routes
 app.use('/api/videos', videoRoutes);
 
-// Health check
+// Health check — bao gồm trạng thái kết nối DB
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: '🎬 AI Video TransStudio API is running' });
+  const dbState = [
+    'Disconnected', // 0
+    'Connected',    // 1
+    'Connecting',   // 2
+    'Disconnecting',// 3
+  ];
+  const mongoose = require('mongoose');
+  const state = mongoose.connection.readyState;
+  res.json({
+    status: state === 1 ? 'OK' : 'DEGRADED',
+    message: '🎬 AI Video TransStudio API is running',
+    database: {
+      status: dbState[state] || 'Unknown',
+      host: mongoose.connection.host || null,
+    },
+  });
 });
 
 // Global error handler
@@ -42,6 +54,18 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-});
+// ─── Khởi động server (chờ DB kết nối trước) ─────────────────────────────
+const start = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+    });
+  } catch (err) {
+    console.error('💥 Khởi động thất bại:', err.message);
+    process.exit(1);
+  }
+};
+
+start();

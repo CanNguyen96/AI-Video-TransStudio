@@ -7,6 +7,7 @@ const {
   getVideoById,
   deleteVideo,
   streamVideo,
+  getThumbnail,
 } = require('../controllers/videoController');
 const {
   transcribeVideo,
@@ -26,6 +27,9 @@ router.get('/:id', getVideoById);
 
 // GET  /api/videos/:id/stream — Stream video (hỗ trợ tua)
 router.get('/:id/stream', streamVideo);
+
+// GET  /api/videos/:id/thumbnail — Lấy thumbnail ảnh
+router.get('/:id/thumbnail', getThumbnail);
 
 // DELETE /api/videos/:id    — Xóa video
 router.delete('/:id', deleteVideo);

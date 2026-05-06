@@ -31,7 +31,31 @@ const generateSrtContent = (segments, bilingual = false) => {
     return '';
   }
 
-  return segments
+  // Sắp xếp theo start time để đảm bảo thứ tự đúng
+  const sorted = [...segments].sort((a, b) => a.start - b.start);
+
+  // Sanitize: đảm bảo end time không vượt quá start của segment tiếp theo
+  // và không có khoảng thời gian quá dài gây phụ đề "đứng yên"
+  const sanitized = sorted.map((seg, idx) => {
+    let end = seg.end;
+
+    // Cap end: không được vượt quá start của segment kế tiếp
+    if (idx < sorted.length - 1) {
+      const nextStart = sorted[idx + 1].start;
+      if (end > nextStart) {
+        end = nextStart - 0.05; // nhường 50ms cho segment tiếp
+      }
+    }
+
+    // Cap end: segment không được dài hơn 10 giây (tránh phụ đề "đứng")
+    if (end - seg.start > 10) {
+      end = seg.start + 10;
+    }
+
+    return { ...seg, end: Math.max(end, seg.start + 0.5) };
+  });
+
+  return sanitized
     .map((seg, idx) => {
       const startTime = secondsToSrtTime(seg.start);
       const endTime = secondsToSrtTime(seg.end);

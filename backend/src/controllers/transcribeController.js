@@ -1,7 +1,14 @@
 const path = require('path');
 const fs = require('fs');
 const Video = require('../models/Video');
-const { extractAudio, getVideoMetadata, burnSubtitles } = require('../services/ffmpegService');
+const {
+  extractAudio,
+  getVideoMetadata,
+  detectSubtitleStreams,
+  burnSubtitles,
+  burnSubtitlesRemovingSoft,
+  burnSubtitlesCoveringHardcoded,
+} = require('../services/ffmpegService');
 const { transcribeAndTranslate } = require('../services/geminiService');
 const { generateSrtContent, saveSrtFile, deleteOldSrtFiles } = require('../services/subtitleService');
 
@@ -45,8 +52,13 @@ const transcribeVideo = async (req, res) => {
     data: { videoId: id, status: 'processing' },
   });
 
-  // Cập nhật status → processing
-  await Video.findByIdAndUpdate(id, { status: 'processing' });
+  // Cập nhật status → processing, xóa dữ liệu phụ đề cũ ngay lập tức
+  await Video.findByIdAndUpdate(id, {
+    status: 'processing',
+    subtitles: [],      // Xóa subtitles cũ → FE không hiện nút download stale
+    segments: [],       // Xóa segments cũ
+    errorMessage: '',   // Reset lỗi cũ
+  });
 
   // ======= PIPELINE BẤT ĐỒNG BỘ =======
   try {
@@ -190,6 +202,8 @@ const downloadBurnedVideo = async (req, res) => {
   try {
     const { id } = req.params;
     const lang = req.query.lang || 'vietnamese';
+    // coverRatio: tỉ lệ che hardcoded sub (mặc định 15%, FE có thể truyền vào)
+    const coverRatio = parseFloat(req.query.coverRatio) || 0.15;
 
     const video = await Video.findById(id);
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
@@ -213,14 +227,42 @@ const downloadBurnedVideo = async (req, res) => {
     const baseName = path.parse(video.fileName).name;
     const outputFileName = `${baseName}.${lang}.burned.mp4`;
     const outputPath = path.join(outputDir, outputFileName);
+    const srtPath = path.resolve(subtitle.srtPath);
 
-    // Burn subtitle vào video
-    await burnSubtitles(videoFilePath, path.resolve(subtitle.srtPath), outputPath);
+    // ====== DETECT SUBTITLE TYPE ======
+    console.log('\n🔍 Phát hiện loại subtitle trong video gốc...');
+    const subtitleDetect = await detectSubtitleStreams(videoFilePath);
+
+    let burnMode;
+    if (subtitleDetect.hasSoftSubtitle) {
+      // Có soft subtitle track → xóa và burn mới
+      burnMode = 'soft';
+      console.log(`   → Chế độ: SOFT SUBTITLE (${subtitleDetect.subtitleCount} track) → Xóa và thay thế`);
+    } else if (video.hasHardcodedSubtitle) {
+      // Field này user/admin có thể set thủ công hoặc FE check thấy có sub burn sẵn
+      burnMode = 'hardcoded';
+      console.log(`   → Chế độ: HARDCODED SUBTITLE → Che và thay thế`);
+    } else {
+      // Không có subtitle gì → burn bình thường
+      burnMode = 'clean';
+      console.log('   → Chế độ: CLEAN VIDEO (không có sub cũ) → Burn trực tiếp');
+    }
+
+    // ====== CHỌN HÀM BURN PHÙ HỢP ======
+    if (burnMode === 'soft') {
+      await burnSubtitlesRemovingSoft(videoFilePath, srtPath, outputPath);
+    } else if (burnMode === 'hardcoded') {
+      await burnSubtitlesCoveringHardcoded(videoFilePath, srtPath, outputPath, coverRatio);
+    } else {
+      await burnSubtitles(videoFilePath, srtPath, outputPath);
+    }
 
     // Stream file đã render về client để download
     const downloadName = `${video.title}_${lang}_subtitled.mp4`;
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
     res.setHeader('Content-Type', 'video/mp4');
+    // Thông báo cho FE biết đã dùng chế độ nào
+    res.setHeader('X-Burn-Mode', burnMode);
 
     const stream = fs.createReadStream(outputPath);
     stream.pipe(res);
