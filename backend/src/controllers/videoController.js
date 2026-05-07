@@ -1,21 +1,25 @@
+/**
+ * CRUD + stream + thumbnail
+ */
 const Video = require('../models/Video');
 const path = require('path');
 const fs = require('fs');
-const { generateThumbnail } = require('../services/ffmpegService');
+const { generateThumbnail } = require('../services/ffmpeg/thumbnailService');
+const { THUMBNAIL_DIR } = require('../config/paths');
 
-const THUMBNAIL_DIR = path.resolve('./uploads/thumbnails');
+// ─── Upload ───────────────────────────────────────────────────────────────────
 
-// @desc  Upload a new video
-// @route POST /api/videos/upload
+/**
+ * @desc  Upload video mới
+ * @route POST /api/videos/upload
+ */
 const uploadVideo = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Không có file nào được upload' });
     }
 
-    const title =
-      req.body.title ||
-      path.parse(req.file.originalname).name;
+    const title = req.body.title || path.parse(req.file.originalname).name;
 
     const video = await Video.create({
       title,
@@ -26,92 +30,83 @@ const uploadVideo = async (req, res) => {
       mimeType: req.file.mimetype,
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'Upload thành công!',
-      data: video,
-    });
+    res.status(201).json({ success: true, message: 'Upload thành công!', data: video });
 
-    // Tự động tạo thumbnail sau khi upload (async, không block response)
+    // Tạo thumbnail sau khi response (không block)
     setImmediate(async () => {
       try {
         const videoFilePath = path.resolve(video.filePath);
         const baseName = path.parse(video.fileName).name;
         const thumbPath = await generateThumbnail(videoFilePath, THUMBNAIL_DIR, baseName);
-        // Lưu đường dẫn thumbnail tương đối vào DB
         await Video.findByIdAndUpdate(video._id, { thumbnail: thumbPath });
         console.log(`🖼️  Thumbnail đã lưu cho video: ${video.title}`);
       } catch (thumbErr) {
         console.warn(`⚠️  Không tạo được thumbnail: ${thumbErr.message}`);
       }
     });
-
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc  Get all videos
-// @route GET /api/videos
+// ─── List & Detail ────────────────────────────────────────────────────────────
+
+/**
+ * @desc  Danh sách video (có phân trang)
+ * @route GET /api/videos
+ */
 const getVideos = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
-    const total = await Video.countDocuments();
-    const videos = await Video.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select('-filePath'); // don't expose server paths
+    const [total, videos] = await Promise.all([
+      Video.countDocuments(),
+      Video.find().sort({ createdAt: -1 }).skip(skip).limit(limit).select('-filePath'),
+    ]);
 
     res.json({
       success: true,
       data: videos,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc  Get single video by ID
-// @route GET /api/videos/:id
+/**
+ * @desc  Chi tiết 1 video
+ * @route GET /api/videos/:id
+ */
 const getVideoById = async (req, res) => {
   try {
-    const video = await Video.findById(req.params.id);
-    if (!video) {
-      return res.status(404).json({ success: false, message: 'Video không tồn tại' });
-    }
+    const video = await Video.findById(req.params.id).select('-filePath');
+    if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
     res.json({ success: true, data: video });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc  Delete a video
-// @route DELETE /api/videos/:id
+// ─── Delete ───────────────────────────────────────────────────────────────────
+
+/**
+ * @desc  Xóa video (xóa file + DB)
+ * @route DELETE /api/videos/:id
+ */
 const deleteVideo = async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
-    if (!video) {
-      return res.status(404).json({ success: false, message: 'Video không tồn tại' });
-    }
+    if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
-    // Xóa file video khỏi disk
     const filePath = path.resolve(video.filePath);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-    // Xóa thumbnail nếu có
     if (video.thumbnail && fs.existsSync(video.thumbnail)) {
-      try { fs.unlinkSync(video.thumbnail); } catch (_) {}
+      try { fs.unlinkSync(video.thumbnail); } catch (_) { }
     }
 
     await video.deleteOne();
@@ -121,31 +116,34 @@ const deleteVideo = async (req, res) => {
   }
 };
 
-// @desc  Serve thumbnail image
-// @route GET /api/videos/:id/thumbnail
+// ─── Streaming ────────────────────────────────────────────────────────────────
+
+/**
+ * @desc  Serve thumbnail image
+ * @route GET /api/videos/:id/thumbnail
+ */
 const getThumbnail = async (req, res) => {
   try {
     const video = await Video.findById(req.params.id).select('thumbnail');
     if (!video || !video.thumbnail || !fs.existsSync(video.thumbnail)) {
-      // Trả về 404 nếu chưa có thumbnail
       return res.status(404).json({ success: false, message: 'Thumbnail chưa sẵn sàng' });
     }
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // cache 1 ngày
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     fs.createReadStream(video.thumbnail).pipe(res);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc  Stream video file
-// @route GET /api/videos/:id/stream
+/**
+ * @desc  Stream video (hỗ trợ Range Requests để tua)
+ * @route GET /api/videos/:id/stream
+ */
 const streamVideo = async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
-    if (!video) {
-      return res.status(404).json({ success: false, message: 'Video không tồn tại' });
-    }
+    if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
     const filePath = path.resolve(video.filePath);
     if (!fs.existsSync(filePath)) {
@@ -157,13 +155,10 @@ const streamVideo = async (req, res) => {
     const range = req.headers.range;
 
     if (range) {
-      // Support range requests for video seeking
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
       const chunkSize = end - start + 1;
-
-      const file = fs.createReadStream(filePath, { start, end });
 
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -171,12 +166,9 @@ const streamVideo = async (req, res) => {
         'Content-Length': chunkSize,
         'Content-Type': video.mimeType,
       });
-      file.pipe(res);
+      fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
-      res.writeHead(200, {
-        'Content-Length': fileSize,
-        'Content-Type': video.mimeType,
-      });
+      res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': video.mimeType });
       fs.createReadStream(filePath).pipe(res);
     }
   } catch (error) {

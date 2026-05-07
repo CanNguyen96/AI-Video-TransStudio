@@ -1,60 +1,56 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const connectDB = require('./config/db');
-const videoRoutes = require('./routes/videoRoutes');
+const express      = require('express');
+const cors         = require('cors');
+const path         = require('path');
+const connectDB    = require('./config/db');
+const videoRoutes  = require('./routes/videoRoutes');
+const subtitleRoutes = require('./routes/subtitleRoutes');
+const errorHandler = require('./middleware/errorHandler');
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin:      process.env.CLIENT_URL || 'http://localhost:3000',
   credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files statically (for thumbnails, etc.)
+// Serve file upload tĩnh (thumbnail, v.v.)
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_PATH || './uploads')));
 
-// Routes
+// ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/videos', videoRoutes);
+app.use('/api/videos', subtitleRoutes);
 
-// Health check — bao gồm trạng thái kết nối DB
+// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  const dbState = [
-    'Disconnected', // 0
-    'Connected',    // 1
-    'Connecting',   // 2
-    'Disconnecting',// 3
-  ];
   const mongoose = require('mongoose');
+  const { getStatus } = require('./services/transcribeQueue');
+  const DB_STATES = ['Disconnected', 'Connected', 'Connecting', 'Disconnecting'];
   const state = mongoose.connection.readyState;
+  const queue = getStatus();
   res.json({
-    status: state === 1 ? 'OK' : 'DEGRADED',
-    message: '🎬 AI Video TransStudio API is running',
+    status:   state === 1 ? 'OK' : 'DEGRADED',
+    message:  '🎬 AI Video TransStudio API is running',
     database: {
-      status: dbState[state] || 'Unknown',
-      host: mongoose.connection.host || null,
+      status: DB_STATES[state] || 'Unknown',
+      host:   mongoose.connection.host || null,
+    },
+    queue: {
+      running:       queue.running,
+      waiting:       queue.waiting,
+      maxConcurrent: queue.maxConcurrent,
     },
   });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({
-      success: false,
-      message: `File quá lớn. Tối đa ${process.env.MAX_FILE_SIZE || 500}MB`,
-    });
-  }
-  res.status(500).json({ success: false, message: err.message || 'Lỗi server' });
-});
+// ─── Global Error Handler (phải đặt SAU tất cả routes) ───────────────────────
+app.use(errorHandler);
 
-// ─── Khởi động server (chờ DB kết nối trước) ─────────────────────────────
+// ─── Khởi động server (chờ DB kết nối trước) ─────────────────────────────────
 const start = async () => {
   try {
     await connectDB();

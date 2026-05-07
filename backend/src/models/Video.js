@@ -39,8 +39,9 @@ const videoSchema = new mongoose.Schema(
     },
     subtitles: [
       {
-        language: { type: String, default: 'vi' },
-        srtPath: { type: String },
+        language:  { type: String, default: 'vi' },
+        srtPath:   { type: String },
+        label:     { type: String, default: '' },   // ← Thêm: nhãn hiển thị (vd: "Song ngữ")
         createdAt: { type: Date, default: Date.now },
       },
     ],
