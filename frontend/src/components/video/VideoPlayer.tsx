@@ -7,6 +7,7 @@ import PlayerControls from "./PlayerControls";
 
 interface VideoPlayerProps {
   videoId: string;
+  token: string | null;
   videoRef: RefObject<HTMLVideoElement | null>;
   // Player state
   isPlaying: boolean;
@@ -40,7 +41,7 @@ interface VideoPlayerProps {
 }
 
 export default function VideoPlayer({
-  videoId, videoRef,
+  videoId, token, videoRef,
   isPlaying, currentTime, duration, volume, isMuted,
   isFullscreen, showControls, progressPct,
   subtitleMode, activeSub, hasSubtitles,
@@ -62,7 +63,7 @@ export default function VideoPlayer({
         ref={videoRef}
         id="main-video-player"
         className="w-full h-full object-contain"
-        src={videoEndpoints.stream(videoId)}
+        src={videoEndpoints.stream(videoId, token)}
         onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
         onLoadedMetadata={() => videoRef.current && setDuration(videoRef.current.duration)}
         onPlay={() => setIsPlaying(true)}

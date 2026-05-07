@@ -21,7 +21,7 @@ const videoSchema = new mongoose.Schema(
       required: true,
     },
     fileSize: {
-      type: Number, // bytes
+      type: Number,
       required: true,
     },
     mimeType: {
@@ -29,7 +29,7 @@ const videoSchema = new mongoose.Schema(
       required: true,
     },
     duration: {
-      type: Number, // seconds, populated later by FFmpeg
+      type: Number,
       default: null,
     },
     status: {
@@ -41,7 +41,7 @@ const videoSchema = new mongoose.Schema(
       {
         language:  { type: String, default: 'vi' },
         srtPath:   { type: String },
-        label:     { type: String, default: '' },   // ← Thêm: nhãn hiển thị (vd: "Song ngữ")
+        label:     { type: String, default: '' },
         createdAt: { type: Date, default: Date.now },
       },
     ],
@@ -57,10 +57,15 @@ const videoSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Raw segments từ Gemini: [{start, end, original, translated}]
     segments: {
       type: Array,
       default: [],
+    },
+    // Chủ sở hữu video — bắt buộc
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
     },
   },
   {

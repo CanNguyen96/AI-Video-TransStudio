@@ -6,6 +6,7 @@ import { videoEndpoints } from "@/lib/api";
 interface VideoCardProps {
   video: Video;
   index: number;
+  token: string | null;
   deletingId: string | null;
   onDelete: (id: string) => void;
   formatSize: (bytes: number) => string;
@@ -13,7 +14,7 @@ interface VideoCardProps {
 }
 
 export default function VideoCard({
-  video, index, deletingId, onDelete, formatSize, formatDate,
+  video, index, token, deletingId, onDelete, formatSize, formatDate,
 }: VideoCardProps) {
   return (
     <div
@@ -29,7 +30,7 @@ export default function VideoCard({
       {/* Thumbnail */}
       <div className="relative h-44 overflow-hidden bg-black">
         <img
-          src={videoEndpoints.thumbnail(video._id)}
+          src={videoEndpoints.thumbnail(video._id, token)}
           alt={video.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={(e) => {

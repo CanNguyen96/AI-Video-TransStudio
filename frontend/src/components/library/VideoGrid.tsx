@@ -4,6 +4,7 @@ import VideoCard from "./VideoCard";
 interface VideoGridProps {
   videos: Video[];
   loading: boolean;
+  token: string | null;
   deletingId: string | null;
   onDelete: (id: string) => void;
   formatSize: (bytes: number) => string;
@@ -11,7 +12,7 @@ interface VideoGridProps {
 }
 
 export default function VideoGrid({
-  videos, loading, deletingId, onDelete, formatSize, formatDate,
+  videos, loading, token, deletingId, onDelete, formatSize, formatDate,
 }: VideoGridProps) {
   if (loading) {
     return (
@@ -34,6 +35,7 @@ export default function VideoGrid({
           key={video._id}
           video={video}
           index={i}
+          token={token}
           deletingId={deletingId}
           onDelete={onDelete}
           formatSize={formatSize}

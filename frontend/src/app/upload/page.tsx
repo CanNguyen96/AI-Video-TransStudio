@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import DropZone from "@/components/upload/DropZone";
@@ -8,6 +8,7 @@ import TitleInput from "@/components/upload/TitleInput";
 import ProgressBar from "@/components/upload/ProgressBar";
 import UploadSuccess from "@/components/upload/UploadSuccess";
 import { videoEndpoints } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -23,7 +24,13 @@ const formatSize = (bytes: number) => {
 };
 
 export default function UploadPage() {
+  const { token, isLoading: authLoading } = useAuth();
   const router = useRouter();
+
+  // Redirect nếu chưa đăng nhập
+  useEffect(() => {
+    if (!authLoading && !token) router.push("/auth");
+  }, [authLoading, token, router]);
 
   const [dragOver, setDragOver]         = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -89,6 +96,7 @@ export default function UploadPage() {
       setErrorMsg("Không thể kết nối tới server. Hãy chắc chắn backend đang chạy.");
     });
     xhr.open("POST", videoEndpoints.upload());
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   };
 

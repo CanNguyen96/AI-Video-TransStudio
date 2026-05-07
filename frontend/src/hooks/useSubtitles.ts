@@ -38,22 +38,27 @@ export const LANGUAGES = [
 /**
  * Quản lý state subtitle: load SRT từ backend, parse, xác định sub active theo thời gian.
  */
-export function useSubtitles(videoId: string, currentTime: number) {
+export function useSubtitles(videoId: string, currentTime: number, token: string | null) {
   const [subtitleMode, setSubtitleMode] = useState<SubtitleMode>("off");
   const [parsedSubs, setParsedSubs]     = useState<ParsedSub[]>([]);
   const [activeSub, setActiveSub]       = useState<string>("");
   const [targetLang, setTargetLang]     = useState("Vietnamese");
   const [showLangPicker, setShowLangPicker] = useState(false);
 
+  const authHeaders: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+
   /** Tải file SRT từ backend và parse */
   const loadSubtitleFile = useCallback(async (lang: string) => {
     try {
-      const res = await fetch(videoEndpoints.subtitles(videoId, lang));
+      const res = await fetch(videoEndpoints.subtitles(videoId, lang), { headers: authHeaders });
       if (!res.ok) return;
       const text = await res.text();
       setParsedSubs(parseSrt(text));
     } catch { /* ignore */ }
-  }, [videoId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, token]);
 
   /** Khi mode thay đổi: tải file mới hoặc xóa subs */
   const handleModeChange = useCallback(async (mode: SubtitleMode) => {

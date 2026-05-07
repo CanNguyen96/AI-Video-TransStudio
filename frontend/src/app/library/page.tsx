@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import LibraryHeader from "@/components/library/LibraryHeader";
 import VideoGrid from "@/components/library/VideoGrid";
 import EmptyState from "@/components/ui/EmptyState";
 import { Video } from "@/types/video";
 import { videoEndpoints } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const formatSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 const formatDate  = (dateStr: string) =>
@@ -16,17 +18,27 @@ const formatDate  = (dateStr: string) =>
   });
 
 export default function LibraryPage() {
-  const [videos, setVideos]       = useState<Video[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
+  const [videos, setVideos]         = useState<Video[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchVideos = async () => {
+  const { token, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  const authHeader = useCallback(
+    () => ({ Authorization: `Bearer ${token}` }),
+    [token]
+  );
+
+  const fetchVideos = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     setError("");
     try {
-      const res  = await fetch(videoEndpoints.list());
+      const res  = await fetch(videoEndpoints.list(), { headers: authHeader() });
       const data = await res.json();
+      if (res.status === 401) { router.push("/auth"); return; }
       if (data.success) setVideos(data.data);
       else setError(data.message || "Không thể tải danh sách video");
     } catch {
@@ -34,15 +46,23 @@ export default function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, authHeader, router]);
 
-  useEffect(() => { fetchVideos(); }, []);
+  // Chờ auth xong rồi mới fetch
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) { router.push("/auth"); return; }
+    fetchVideos();
+  }, [authLoading, token, fetchVideos, router]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Xóa video này?")) return;
     setDeletingId(id);
     try {
-      const res = await fetch(videoEndpoints.delete(id), { method: "DELETE" });
+      const res = await fetch(videoEndpoints.delete(id), {
+        method: "DELETE",
+        headers: authHeader(),
+      });
       if (res.ok) setVideos((prev) => prev.filter((v) => v._id !== id));
     } catch {
       alert("Xóa thất bại");
@@ -58,7 +78,6 @@ export default function LibraryPage() {
 
         <LibraryHeader videoCount={videos.length} />
 
-        {/* Error state */}
         {error && !loading && (
           <div
             className="p-6 rounded-2xl text-center"
@@ -75,7 +94,6 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && !error && videos.length === 0 && (
           <EmptyState
             title="Chưa có video nào"
@@ -85,11 +103,11 @@ export default function LibraryPage() {
           />
         )}
 
-        {/* Video grid */}
         {!error && (
           <VideoGrid
             videos={videos}
             loading={loading}
+            token={token}
             deletingId={deletingId}
             onDelete={handleDelete}
             formatSize={formatSize}

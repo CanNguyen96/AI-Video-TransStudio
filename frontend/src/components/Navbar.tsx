@@ -1,16 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout } = useAuth();
 
   const navLinks = [
     { href: "/", label: "Trang chủ" },
     { href: "/upload", label: "Upload Video" },
     { href: "/library", label: "Thư viện" },
   ];
+
+  const handleLogout = () => {
+    logout();
+    router.push("/auth");
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-white/5">
@@ -45,14 +53,31 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* CTA */}
-        <Link
-          href="/upload"
-          id="nav-upload-cta"
-          className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90 transition-all duration-200 hover:scale-105 shadow-lg glow-purple"
-        >
-          + Upload Video
-        </Link>
+        {/* Auth section */}
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="hidden md:block text-sm text-white/50">
+                👋 <span className="text-white/80 font-medium">{user.name}</span>
+              </span>
+              <button
+                id="nav-logout-btn"
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
+              >
+                Đăng xuất
+              </button>
+            </>
+          ) : (
+            <Link
+              href="/auth"
+              id="nav-login-btn"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90 transition-all duration-200 hover:scale-105 shadow-lg glow-purple"
+            >
+              Đăng nhập
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   );

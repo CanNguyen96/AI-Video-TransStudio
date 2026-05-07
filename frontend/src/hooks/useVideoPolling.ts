@@ -13,10 +13,15 @@ import { videoEndpoints } from "@/lib/api";
 export function useVideoPolling(
   videoId: string,
   setVideo: (updater: (v: Video | null) => Video | null) => void,
-  onCompleted: () => void
+  onCompleted: () => void,
+  token: string | null
 ) {
   const pollingRef   = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const [transcribing, setTranscribing] = useState(false);
+
+  const authHeaders: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   const stopPolling = useCallback(() => {
     clearInterval(pollingRef.current);
@@ -26,7 +31,7 @@ export function useVideoPolling(
     stopPolling();
     pollingRef.current = setInterval(async () => {
       try {
-        const res  = await fetch(videoEndpoints.detail(videoId));
+        const res  = await fetch(videoEndpoints.detail(videoId), { headers: authHeaders });
         const data = await res.json();
         if (!data.success) return;
 
@@ -40,7 +45,8 @@ export function useVideoPolling(
         }
       } catch { /* ignore network errors */ }
     }, 3000);
-  }, [videoId, setVideo, onCompleted, stopPolling]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, setVideo, onCompleted, stopPolling, token]);
 
   const handleTranscribe = useCallback(
     async (targetLang: string, isProcessing: boolean) => {
@@ -49,7 +55,10 @@ export function useVideoPolling(
       try {
         await fetch(videoEndpoints.transcribe(videoId), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders,
+          },
           body: JSON.stringify({ language: targetLang }),
         });
         setVideo((v) => v ? { ...v, status: "processing" } : v);
@@ -59,7 +68,8 @@ export function useVideoPolling(
         alert("Không thể kết nối server. Hãy thử lại!");
       }
     },
-    [videoId, setVideo, startPolling]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [videoId, setVideo, startPolling, token]
   );
 
   return {

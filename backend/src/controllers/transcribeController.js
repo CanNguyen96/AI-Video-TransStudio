@@ -33,8 +33,8 @@ const transcribeVideo = async (req, res) => {
   const { id } = req.params;
   const targetLanguage = req.body.language || 'Vietnamese';
 
-  // 1. Tìm video
-  const video = await Video.findById(id).select('+filePath');
+  // 1. Tìm video (phải là của chính user)
+  const video = await Video.findOne({ _id: id, owner: req.user._id }).select('+filePath');
   if (!video) {
     return res.status(404).json({ success: false, message: 'Video không tồn tại' });
   }

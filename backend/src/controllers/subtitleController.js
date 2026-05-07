@@ -27,7 +27,7 @@ const srtExists = (subtitle) =>
 const getSubtitle = async (req, res) => {
   try {
     const { id, lang } = req.params;
-    const video = await Video.findById(id);
+    const video = await Video.findOne({ _id: id, owner: req.user._id });
 
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
@@ -51,7 +51,7 @@ const getSubtitle = async (req, res) => {
 const downloadSubtitle = async (req, res) => {
   try {
     const { id, lang } = req.params;
-    const video = await Video.findById(id);
+    const video = await Video.findOne({ _id: id, owner: req.user._id });
 
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
@@ -76,7 +76,7 @@ const downloadBurnedVideo = async (req, res) => {
     const lang = req.query.lang || 'vietnamese';
     const coverRatio = parseFloat(req.query.coverRatio) || 0.15;
 
-    const video = await Video.findById(id);
+    const video = await Video.findOne({ _id: id, owner: req.user._id }).select('+filePath');
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
     const subtitle = findSubtitle(video, lang);

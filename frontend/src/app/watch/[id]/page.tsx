@@ -14,37 +14,50 @@ import { useSubtitles } from "@/hooks/useSubtitles";
 import { useVideoPolling } from "@/hooks/useVideoPolling";
 import { Video } from "@/types/video";
 import { videoEndpoints } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function WatchPage() {
   const { id } = useParams<{ id: string }>();
+  const { token, isLoading: authLoading } = useAuth();
+  const router = useRouter();
 
-  const [video, setVideo]   = useState<Video | null>(null);
+  const [video, setVideo]     = useState<Video | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState("");
+  const [error, setError]     = useState("");
 
   // ─── Hooks ──────────────────────────────────────────────────────────────────
-  const player   = useVideoPlayer();
-  const subtitles = useSubtitles(id, player.currentTime);
+  const player    = useVideoPlayer();
+  const subtitles = useSubtitles(id, player.currentTime, token);
 
   const onCompleted = useCallback(() => {
     subtitles.loadSubtitleFile("bilingual");
     subtitles.setSubtitleMode("bilingual");
   }, [subtitles]);
 
-  const polling = useVideoPolling(id, setVideo as (u: (v: Video | null) => Video | null) => void, onCompleted);
+  const polling = useVideoPolling(id, setVideo as (u: (v: Video | null) => Video | null) => void, onCompleted, token);
 
   // ─── Fetch video ─────────────────────────────────────────────────────────────
   const fetchVideo = useCallback(async () => {
+    if (!token) return;
     try {
-      const res  = await fetch(videoEndpoints.detail(id));
+      const res  = await fetch(videoEndpoints.detail(id), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { router.push("/auth"); return; }
       const data = await res.json();
       if (data.success) setVideo(data.data);
       else setError(data.message || "Video không tồn tại");
     } catch { setError("Không thể kết nối tới server"); }
     finally  { setLoading(false); }
-  }, [id]);
+  }, [id, token, router]);
 
-  useEffect(() => { fetchVideo(); }, [fetchVideo]);
+  // Redirect nếu chưa đăng nhập
+  useEffect(() => {
+    if (!authLoading && !token) router.push("/auth");
+  }, [authLoading, token, router]);
+
+  useEffect(() => { if (token) fetchVideo(); }, [fetchVideo, token]);
 
   // Auto-load subtitle & polling khi status thay đổi
   useEffect(() => {
@@ -103,6 +116,7 @@ export default function WatchPage() {
         {/* Video Player */}
         <VideoPlayer
           videoId={id}
+          token={token}
           videoRef={player.videoRef}
           isPlaying={player.isPlaying}
           currentTime={player.currentTime}

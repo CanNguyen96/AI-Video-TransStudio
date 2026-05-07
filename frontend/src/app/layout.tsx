@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "AI Video TransStudio",
-  description: "Upload video và tạo phụ đề dịch tự động bằng AI. Hỗ trợ Double Subtitle, AI Dubbing và xuất file SRT.",
+  description: "Upload video và tạo phụ đề dịch tự động bằng AI.",
   keywords: ["AI", "video", "phụ đề", "dịch thuật", "subtitle", "translation"],
   authors: [{ name: "AI Video TransStudio" }],
   openGraph: {
@@ -16,15 +17,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi">
+    <html lang="vi" data-scroll-behavior="smooth">
       <body suppressHydrationWarning className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

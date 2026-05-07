@@ -3,6 +3,7 @@ const express      = require('express');
 const cors         = require('cors');
 const path         = require('path');
 const connectDB    = require('./config/db');
+const authRoutes   = require('./routes/authRoutes');
 const videoRoutes  = require('./routes/videoRoutes');
 const subtitleRoutes = require('./routes/subtitleRoutes');
 const errorHandler = require('./middleware/errorHandler');
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_PATH || './uploads')));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+app.use('/api/auth',   authRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/videos', subtitleRoutes);
 

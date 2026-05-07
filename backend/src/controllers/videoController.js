@@ -28,6 +28,7 @@ const uploadVideo = async (req, res) => {
       filePath: req.file.path.replace(/\\/g, '/'),
       fileSize: req.file.size,
       mimeType: req.file.mimetype,
+      owner: req.user._id,        // ← Gán owner
     });
 
     res.status(201).json({ success: true, message: 'Upload thành công!', data: video });
@@ -62,9 +63,12 @@ const getVideos = async (req, res) => {
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
+    // Chỉ lấy video của user đang đăng nhập
+    const filter = { owner: req.user._id };
+
     const [total, videos] = await Promise.all([
-      Video.countDocuments(),
-      Video.find().sort({ createdAt: -1 }).skip(skip).limit(limit).select('-filePath'),
+      Video.countDocuments(filter),
+      Video.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).select('-filePath'),
     ]);
 
     res.json({
@@ -83,7 +87,10 @@ const getVideos = async (req, res) => {
  */
 const getVideoById = async (req, res) => {
   try {
-    const video = await Video.findById(req.params.id).select('-filePath');
+    const video = await Video.findOne({
+      _id: req.params.id,
+      owner: req.user._id,
+    }).select('-filePath');
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
     res.json({ success: true, data: video });
   } catch (error) {
@@ -99,7 +106,7 @@ const getVideoById = async (req, res) => {
  */
 const deleteVideo = async (req, res) => {
   try {
-    const video = await Video.findById(req.params.id);
+    const video = await Video.findOne({ _id: req.params.id, owner: req.user._id }).select('+filePath');
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
     const filePath = path.resolve(video.filePath);

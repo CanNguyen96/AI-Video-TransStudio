@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Video, BurnState } from "@/types/video";
 import { videoEndpoints } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 interface SubtitleDownloadsProps {
   video: Video;
@@ -16,12 +17,21 @@ const burnOptions = [
 
 export default function SubtitleDownloads({ video, videoId }: SubtitleDownloadsProps) {
   const [burnState, setBurnState] = useState<Record<string, BurnState>>({});
+  const { token } = useAuth();
+
+  // Tải SRT qua <a href> — cần token trong query string
+  const srtDownloadUrl = (lang: string) =>
+    token
+      ? `${videoEndpoints.downloadSubtitle(videoId, lang)}?token=${token}`
+      : videoEndpoints.downloadSubtitle(videoId, lang);
 
   const handleBurnDownload = async (lang: string, label: string) => {
     if (burnState[lang] === "rendering") return;
     setBurnState((prev) => ({ ...prev, [lang]: "rendering" }));
     try {
-      const res = await fetch(videoEndpoints.downloadBurned(videoId, lang));
+      const res = await fetch(videoEndpoints.downloadBurned(videoId, lang), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
@@ -55,7 +65,7 @@ export default function SubtitleDownloads({ video, videoId }: SubtitleDownloadsP
         {video.subtitles.map((sub) => (
           <a
             key={sub.language}
-            href={videoEndpoints.downloadSubtitle(videoId, sub.language)}
+            href={srtDownloadUrl(sub.language)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:scale-105"
             style={{
               background: "rgba(34,197,94,0.15)",
@@ -74,7 +84,7 @@ export default function SubtitleDownloads({ video, videoId }: SubtitleDownloadsP
       </p>
       <div className="flex flex-wrap gap-2">
         {burnOptions.map(({ lang, label }) => {
-          const state      = burnState[lang] ?? "idle";
+          const state       = burnState[lang] ?? "idle";
           const isRendering = state === "rendering";
           const isDone      = state === "done";
           const isError     = state === "error";
