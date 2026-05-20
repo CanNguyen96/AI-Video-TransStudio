@@ -2,6 +2,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { GoogleAIFileManager } = require('@google/generative-ai/server');
 const fs = require('fs');
 const path = require('path');
+const { getAudioDuration, splitAudio } = require('./gemini/audioHelper');
+const { parseAndValidateResponse } = require('./gemini/responseParser');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
@@ -46,11 +48,9 @@ const uploadToFileAPI = async (audioPath) => {
 };
 
 /**
- * Gửi file audio lên Gemini API và nhận về transcript với timestamps
+ * Gửi file audio đơn lẻ lên Gemini API và nhận về transcript với timestamps
  */
-const transcribeAndTranslate = async (audioPath, targetLanguage = 'Vietnamese') => {
-  console.log(`🤖 Gemini: Đang xử lý ${path.basename(audioPath)}...`);
-
+const transcribeSingleFile = async (audioPath, targetLanguage = 'Vietnamese') => {
   const fileSizeBytes = fs.statSync(audioPath).size;
   const fileSizeMB = fileSizeBytes / (1024 * 1024);
   console.log(`   File size: ${fileSizeMB.toFixed(2)} MB`);
@@ -117,7 +117,7 @@ Now transcribe and translate the entire audio:`;
           }],
           generationConfig: {
             responseMimeType: 'application/json',
-            // Tăng lên để tránh response bị cắt giữa chừng gây segment cuối bị hỏ
+            // Tăng lên để tránh response bị cắt giữa chừng gây segment cuối bị hỏng
             maxOutputTokens: 65536,
             temperature: 0.1,  // Giảm temperature để output ổn định hơn
           }
@@ -168,6 +168,73 @@ Now transcribe and translate the entire audio:`;
   throw formatGeminiError(lastError);
 };
 
+/**
+ * Gửi file audio lên Gemini API và nhận về transcript với timestamps
+ * (Tự động chia nhỏ nếu audio dài hơn 10 phút)
+ */
+const transcribeAndTranslate = async (audioPath, targetLanguage = 'Vietnamese') => {
+  console.log(`🤖 Gemini: Đang xử lý ${path.basename(audioPath)}...`);
+  
+  let duration = 0;
+  try {
+    duration = await getAudioDuration(audioPath);
+  } catch (err) {
+    console.warn(`   ⚠️ Không đọc được duration bằng ffprobe: ${err.message}`);
+  }
+  
+  console.log(`   Thời lượng audio: ${duration.toFixed(1)}s`);
+  
+  const SEGMENT_LIMIT = 60; // 1 phút
+  if (duration > SEGMENT_LIMIT) {
+    console.log(`   ⚠️ Audio dài hơn 1 phút. Bắt đầu chia nhỏ audio...`);
+    const tempDirName = `chunks_${path.parse(audioPath).name}_${Date.now()}`;
+    const tempDir = path.join(path.dirname(audioPath), tempDirName);
+    
+    let chunkFiles = [];
+    try {
+      chunkFiles = await splitAudio(audioPath, tempDir, SEGMENT_LIMIT);
+      const allSegments = [];
+      
+      for (let i = 0; i < chunkFiles.length; i++) {
+        const chunkFile = chunkFiles[i];
+        console.log(`\n🤖 Đang dịch chunk [${i + 1}/${chunkFiles.length}]: ${path.basename(chunkFile)}`);
+        
+        const segments = await transcribeSingleFile(chunkFile, targetLanguage);
+        
+        // Cộng thêm time offset (i * SEGMENT_LIMIT)
+        const offset = i * SEGMENT_LIMIT;
+        const offsetSegments = segments.map((seg) => ({
+          ...seg,
+          start: Number((seg.start + offset).toFixed(2)),
+          end: Number((seg.end + offset).toFixed(2)),
+        }));
+        
+        allSegments.push(...offsetSegments);
+      }
+      
+      return allSegments;
+    } finally {
+      // Dọn dẹp thư mục temp chunk
+      try {
+        if (fs.existsSync(tempDir)) {
+          if (chunkFiles.length > 0) {
+            chunkFiles.forEach((file) => {
+              if (fs.existsSync(file)) fs.unlinkSync(file);
+            });
+          }
+          fs.rmdirSync(tempDir);
+          console.log(`   🗑️ Đã xóa thư mục chunk tạm: ${tempDirName}`);
+        }
+      } catch (err) {
+        console.warn(`   ⚠️ Không thể xóa thư mục chunk tạm: ${err.message}`);
+      }
+    }
+  } else {
+    // File ngắn, dịch trực tiếp
+    return transcribeSingleFile(audioPath, targetLanguage);
+  }
+};
+
 const formatGeminiError = (err) => {
   const msg = err?.message || '';
   if (msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
@@ -177,99 +244,6 @@ const formatGeminiError = (err) => {
     return new Error('GEMINI_API_KEY không hợp lệ. Hãy kiểm tra lại file .env');
   }
   return new Error(`Gemini API lỗi: ${msg.substring(0, 200)}`);
-};
-
-/**
- * Parse JSON từ Gemini + khôi phục nếu bị cắt cụt + lọc bỏ segments ảo giác
- */
-const parseAndValidateResponse = (responseText) => {
-  let cleaned = responseText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/, '')
-    .trim();
-
-  let parsed = null;
-
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    console.warn(`⚠️ JSON bị lỗi (${err.message}), đang thử khôi phục...`);
-
-    // Khôi phục bằng cách chặt bớt phần cuối bị hỏng
-    let textToTry = cleaned;
-    while (textToTry.length > 5) {
-      try { parsed = JSON.parse(textToTry + ']'); break; } catch (e) {}
-      const lastBrace = textToTry.lastIndexOf('}');
-      if (lastBrace === -1) break;
-      textToTry = textToTry.substring(0, lastBrace + 1);
-      try { parsed = JSON.parse(textToTry + ']'); break; } catch (e) {}
-      textToTry = textToTry.substring(0, textToTry.length - 1);
-    }
-
-    if (!parsed) {
-      throw new Error(`Response không chứa JSON hợp lệ: ${err.message}`);
-    }
-    console.log(`✅ Đã khôi phục ${parsed.length} segments từ JSON bị lỗi!`);
-  }
-
-  if (!Array.isArray(parsed)) throw new Error('Response không phải là array');
-
-  // Pattern nhận diện text bị hallucinate thành danh sách timestamps
-  // Ví dụ: "00:00 00:01 00:02 00:03..."
-  const TIMESTAMP_LIST_PATTERN = /^(\d{2}:\d{2}\s+){3,}/;
-
-  // Bước 1: Map và normalize
-  const mapped = parsed.map((seg) => ({
-    start:      parseFloat(seg.start) || 0,
-    end:        parseFloat(seg.end)   || 0,
-    original:   String(seg.original   || '').trim(),
-    translated: String(seg.translated || seg.original || '').trim(),
-  }));
-
-  // Bước 2: Tính max end time thực tế (dùng để cap các segment bị hảo)
-  // Lấy end time lớn nhất của 90% segments đầu tiên để tránh outlier
-  const sortedEnds = mapped
-    .map((s) => s.end)
-    .filter((e) => e > 0)
-    .sort((a, b) => a - b);
-  const p90End = sortedEnds[Math.floor(sortedEnds.length * 0.9)] || 7200;
-  // Giới hạn tối đa: không quá 2 giờ (7200s) và không quá giá trị p90 * 1.5
-  const MAX_END = Math.min(7200, p90End * 1.5);
-
-  const validated = mapped
-    .map((seg) => {
-      // Cap end time bất thường (segment cuối bị recover có end = 0 sau khi parseFloat)
-      // Hoặc Gemini hallucinate end rất lớn
-      if (seg.end > MAX_END) {
-        console.warn(`   ⚠️ Cap end time bất thường: ${seg.end}s → bỏ qua segment này`);
-        return null;
-      }
-      // Đảm bảo mỗi segment tối đa 15 giây (nếu dài hơn là bất thường)
-      if (seg.end - seg.start > 15) {
-        console.warn(`   ⚠️ Segment quá dài: ${(seg.end - seg.start).toFixed(1)}s | "${seg.original.substring(0, 40)}"`);
-        // Không bỏ, chỉ cảnh báo — có thể là chủ đề nhạc, khoảng lặng...
-      }
-      return seg;
-    })
-    .filter((seg) => {
-      if (!seg) return false;
-      if (!seg.original || seg.original.length === 0) return false;
-      if (seg.end <= seg.start) return false;
-      // Lọc bỏ segment bị ảo giác thành danh sách timestamps
-      if (TIMESTAMP_LIST_PATTERN.test(seg.original)) {
-        console.warn(`   ⚠️ Lọc segment ảo giác: "${seg.original.substring(0, 60)}"`);
-        return false;
-      }
-      if (TIMESTAMP_LIST_PATTERN.test(seg.translated)) {
-        console.warn(`   ⚠️ Lọc translated ảo giác: "${seg.translated.substring(0, 60)}"`);
-        return false;
-      }
-      return true;
-    });
-
-  console.log(`   → Sau validate: ${validated.length}/${mapped.length} segments hợp lệ (max end cap: ${MAX_END.toFixed(0)}s)`);
-  return validated;
 };
 
 module.exports = { transcribeAndTranslate };

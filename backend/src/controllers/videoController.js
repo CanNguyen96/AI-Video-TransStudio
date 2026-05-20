@@ -131,13 +131,17 @@ const deleteVideo = async (req, res) => {
  */
 const getThumbnail = async (req, res) => {
   try {
-    const video = await Video.findById(req.params.id).select('thumbnail');
+    const video = await Video.findOne({ _id: req.params.id, owner: req.user._id }).select('thumbnail');
     if (!video || !video.thumbnail || !fs.existsSync(video.thumbnail)) {
       return res.status(404).json({ success: false, message: 'Thumbnail chưa sẵn sàng' });
     }
     res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    fs.createReadStream(video.thumbnail).pipe(res);
+    const stream = fs.createReadStream(video.thumbnail);
+    stream.pipe(res);
+    req.on('close', () => {
+      stream.destroy();
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -149,7 +153,7 @@ const getThumbnail = async (req, res) => {
  */
 const streamVideo = async (req, res) => {
   try {
-    const video = await Video.findById(req.params.id);
+    const video = await Video.findOne({ _id: req.params.id, owner: req.user._id });
     if (!video) return res.status(404).json({ success: false, message: 'Video không tồn tại' });
 
     const filePath = path.resolve(video.filePath);
@@ -173,10 +177,18 @@ const streamVideo = async (req, res) => {
         'Content-Length': chunkSize,
         'Content-Type': video.mimeType,
       });
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.pipe(res);
+      req.on('close', () => {
+        stream.destroy();
+      });
     } else {
       res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': video.mimeType });
-      fs.createReadStream(filePath).pipe(res);
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+      req.on('close', () => {
+        stream.destroy();
+      });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

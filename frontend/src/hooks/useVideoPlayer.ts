@@ -65,10 +65,10 @@ export function useVideoPlayer() {
     clearTimeout(controlsTimer.current);
     // Ẩn controls sau 3 giây nếu đang play
     controlsTimer.current = setTimeout(() => {
-      setShowControls((playing) => {
-        if (playing) return false;
-        return true;
-      });
+      const isVideoPlaying = videoRef.current && !videoRef.current.paused;
+      if (isVideoPlaying) {
+        setShowControls(false);
+      }
     }, 3000);
   }, []);
 

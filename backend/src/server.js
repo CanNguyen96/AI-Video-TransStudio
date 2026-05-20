@@ -53,9 +53,50 @@ app.get('/api/health', (req, res) => {
 app.use(errorHandler);
 
 // ─── Khởi động server (chờ DB kết nối trước) ─────────────────────────────────
+const cleanupTempFilesOnStartup = () => {
+  const fs = require('fs');
+  const { AUDIO_DIR, BURNED_DIR } = require('./config/paths');
+  const dirsToClean = [AUDIO_DIR, BURNED_DIR];
+
+  console.log('🧹 Khởi động: Đang dọn dẹp các thư mục file tạm...');
+  dirsToClean.forEach((dir) => {
+    try {
+      if (fs.existsSync(dir)) {
+        const files = fs.readdirSync(dir);
+        files.forEach((file) => {
+          const filePath = path.join(dir, file);
+          if (fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+            console.log(`   🗑️ Đã xóa file rác: ${file}`);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn(`   ⚠️ Lỗi dọn dẹp thư mục ${dir}:`, err.message);
+    }
+  });
+};
+
+const resetStuckVideos = async () => {
+  try {
+    const Video = require('./models/Video');
+    const result = await Video.updateMany(
+      { status: 'processing' },
+      { status: 'error', errorMessage: 'Server restarted during processing. Please try again.' }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`🧹 Đã khôi phục ${result.modifiedCount} video bị kẹt ở trạng thái 'processing'.`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Lỗi khôi phục video bị kẹt:', err.message);
+  }
+};
+
 const start = async () => {
   try {
     await connectDB();
+    await resetStuckVideos();
+    cleanupTempFilesOnStartup();
     app.listen(PORT, () => {
       console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
       console.log(`📡 Health check: http://localhost:${PORT}/api/health`);

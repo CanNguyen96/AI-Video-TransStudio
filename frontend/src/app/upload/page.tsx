@@ -41,7 +41,11 @@ export default function UploadPage() {
   const [uploadedId, setUploadedId]     = useState<string | null>(null);
 
   const handleFileSelect = (file: File) => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ["mp4", "mpeg", "mov", "avi", "webm", "mkv"];
+    const isAllowedType = ALLOWED_TYPES.includes(file.type) || (ext && allowedExtensions.includes(ext));
+
+    if (!isAllowedType) {
       setErrorMsg("Định dạng không hỗ trợ. Vui lòng chọn: MP4, MOV, AVI, WebM, MKV");
       return;
     }
